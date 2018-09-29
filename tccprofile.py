@@ -1111,8 +1111,9 @@ def parse_args():
         type=int,
         dest='payload_ver',
         metavar='payload_version',
-        help='Version to use for the profile.',
-        required=True,
+        help='Version to use for the profile. '
+             'This is now deprecated as Apple documentation indicates this value must be 1.',
+        required=False,
     )
 
     parser.add_argument(
