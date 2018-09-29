@@ -383,8 +383,11 @@ class App(tk.Frame):
             payload_identifier=payload['Identifier'],
             payload_organization=payload['Organization'],
             payload_version=version,
+            profile_removal_password=None,
             sign_cert=None if sign == 'No' else sign,
-            filename=filename
+            filename=filename,
+            removal_date=None,
+            timezone=None,
         )
 
         tcc_profile.set_services_dict(app_lists)
