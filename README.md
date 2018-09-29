@@ -1,6 +1,22 @@
 # tccprofile
 `tccprofile.py` can be used to create a configuration profile containing Privacy Preferences Policy Control Payload's for code signed applications/binaries or code signed scripts on macOS Mojave 10.14.
 
+## Table of Contents
+- [Requirements](#requirements)
+- [Installing Profiles](#installing-profiles)
+- [Usage](#usage)
+- [What are Privacy Preferences Policy Control Payloads?](#what-are-privacy-preferences-policy-control-payloads)
+- [Other Notes](#other-notes)
+    - [Deploying via JAMF](#deploying-via-jamf)
+    - [File Paths](#file-paths)
+    - [Determining Code Signing Requirements for Applications and Scripts](#determining-code-signing-requirements-for-applications-and-scripts)
+    - [Scripts and Shebangs](#scripts-and-shebangs)
+    - [Code Signing Scripts](#code-signing-scripts)
+    - [Explicit or Generic Code Signing Requirements](#explicit-or-generic-code-signing-requirements)
+    - [Camera and Microphone Payloads](#camera-and-microphone-payloads)
+- [Command Line Examples](#command-line-examples)
+- [GUI Mode](#gui-mode)
+
 ## Requirements
 - This script is targeted for use in python 2.7.10 as distributed with macOS
 
@@ -65,20 +81,20 @@ The `Identifer` path result will need to be updated to point to the correct loca
 sed -i '' 's/\/Users\/carl\/Desktop\/git\/outset\/pkgroot//g Outset_PPPCP.mobileconfig'
 ```
 
-### Code Signing
+### Determining Code Signing Requirements for Applications and Scripts
 `tccutil.py` will check to see if files are code signed, and if so, will use the code signing details it finds.
 
-#### Scripts and shebangs
+### Scripts and shebangs
 If a script isn't code signed, it will attempt to find the code signing details for the shell or interpreter path in the script's shebang line.
 
 Please note, it will not be able to determine the correct path of a shell or interpreter if a `#!/usr/bin/env <interpreter/shell>` style shebang is used.
 - A `#!/usr/bin/env` style shebang will not guarantee that the interpreter or shell used by the script will be consistent depending on what a user has installed on their OS.
 - Newer versions of shells or interpreters (for example, a bash 4.x shell, or python3 interpreter) may not be code signed.
 
-#### Code signing your own scripts
+### Code Signing Scripts
 You can code sign your own scripts. Be aware that the code sign details for a "plain text" file are stored in extended attributes and may not be preserved when the script is deployed. [See this post for more details](https://carlashley.com/2018/09/23/code-signing-scripts-for-pppc-whitelisting/).
 
-#### Explicit code sign details, or generic code sign details
+### Explicit or Generic Code Signing Requirements
 When creating these profiles, `tccprofile.py` will always use the _complete_ code sign requirements for the binary or script being approved or blocked in the profile.
 
 The use of generic code sign requirements is _not_ recommended, as this will make it easier for malicious apps to fake the code signing requirements of another app and potentially harm the system.
@@ -93,7 +109,7 @@ The below code signing requirements are a generic set of requirements:
 identifier "com.github.outset" and anchor apple generic
 ```
 
-#### Camera and Microphone
+### Camera and Microphone Payloads
 Per Apple's [Configuration Profile Reference](https://developer.apple.com/enterprise/documentation/Configuration-Profile-Reference.pdf) documentation, the camera and microphone payloads will _always_ be set to `Deny`
 
 
@@ -121,7 +137,7 @@ Create payloads for multiple types:
 ```
 
 ### GUI Mode
-@bryantyrrell has created a GUI for `tccprofile.py` as an alternative to the CLI.
+@brysonntyrrell has created a GUI for `tccprofile.py` as an alternative to the CLI.
 
 To launch the GUI, invoke the script without passing any command line arguments:
 ```bash
@@ -135,4 +151,3 @@ Errors or incorrect inputs will cause a message to be displayed in red italic te
 As with the CLI, selecting an app or binary and a service will grant `ALLOW` permissions with the exception of the `Camera` and `Microphone` payloads (those are explictly `DENY`).
 
 ![TCC Profile GUI](images/tccprofile_gui.png)
-
