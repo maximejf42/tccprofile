@@ -2,11 +2,13 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import datetime
 import errno
 import os
 import plistlib
-import uuid
+import pytz
 import re
+import uuid
 import subprocess
 import sys
 import Tkinter as tk
@@ -24,9 +26,10 @@ from Foundation import NSPropertyListMutableContainers  # NOQA
 from Foundation import NSPropertyListXMLFormat_v1_0  # NOQA
 # pylint: enable=E0611
 
+# Script details
 __author__ = ['Carl Windus', 'Bryson Tyrrell']
 __license__ = 'Apache License 2.0'
-__version__ = '1.0.1'
+__version__ = '1.0.2'
 
 VERSION_STRING = 'Version: {} ({}), Authors: {}'.format(__version__, __license__, ', '.join(__author__))
 
@@ -515,7 +518,8 @@ class PrivacyProfiles(object):
     ]
 
     def __init__(self, payload_description, payload_name, payload_identifier,
-                 payload_organization, payload_version, sign_cert, filename):
+                 payload_organization, payload_version, profile_removal_password,
+                 sign_cert, filename, removal_date, timezone):
         """Creates a Privacy Preferences Policy Control Profile for macOS
         Mojave.
         """
@@ -527,7 +531,16 @@ class PrivacyProfiles(object):
         self.payload_type = 'com.apple.TCC.configuration-profile-policy'
         self.payload_uuid = str(uuid.uuid1()).upper()  # This is used in the 'PayloadContent' part of the profile
         self.profile_uuid = str(uuid.uuid1()).upper()  # This is used in the root of the profile
-        self.payload_version = payload_version
+        self.payload_version = 1  # According to Apple documentation, this value must be `1`.
+        # The payload_version argument will be soft deprecated for the time being.
+
+        # Profile removal details. Only add the 'RemovalPassword' entry to 'PayloadContent' if there is one.
+        if profile_removal_password:
+            self.profile_removable = True
+            self.profile_removal_password = profile_removal_password
+        else:
+            self.profile_removal_password = False
+            self.profile_removable = False
 
         # Basic requirements for this profile to work
         self.template = {
@@ -551,19 +564,56 @@ class PrivacyProfiles(object):
             'PayloadType': 'Configuration',
             'PayloadUUID': self.profile_uuid,
             'PayloadVersion': self.payload_version,
+            'PayloadRemovalDisallowed': self.profile_removable,  # Boolean. Requires password to delete if value is True; False value allows removal.
         }
+
+        # Only add removal password if provided. This is recorded in plain text. Sign profile before deploying.
+        self.profile_removal_password = self._set_profile_removal_password(profile_removal_password)
+
+        if self.profile_removable:
+            self.template['PayloadContent'][0]['RemovalPassword'] = self.profile_removal_password
+
+        # If a removal date is specified
+        self.removal_date = self._set_profile_removal_date(removal_date)
+        self.timezone = self._set_timezone(timezone)
+
+        if self.removal_date and self.timezone:
+            self.template['RemovalDate'] = self._utc_formatted_time(local_time=self.removal_date, timezone=self.timezone)
+        elif self.removal_date and not self.timezone:
+            print 'A time zone for the target Mac must be provided when specifying a removal date. For example: --timezone="Australia/Brisbane"'
+            print 'The time zone of the target is used as the time zone on the profile build machine may differ.'
+            sys.exit(1)
 
         self._app_lists = dict()
         self._sign_cert = self._set_sign_profile(sign_cert)
         self._filename = self._set_filename(filename)
 
-        # Note, there's different values for the python codesigns depending on which python is called.
-        # /usr/bin/python is com.apple.python
-        # /System/Library/Frameworks/Python.framework/Resources/Python.app is org.python.python
-        # These different codesign values cause issues with LaunchAgents/LaunchDaemons that don't explicitly call
-        # the interpreter in the ProgramArguments array.
-        # For the time being, strongly recommend any LaunchDaemons/LaunchAgents that launch python scripts to
-        # add in <string>/usr/bin/python</string> to the ProgramArguments array _before_ the <string>/path/to/pythonscript.py</string> line.
+    @staticmethod
+    def _utc_formatted_time(local_time, timezone):
+        """Returns a UTC date for use where a date is required in UTC format"""
+        valid_time_format = '%Y-%m-%d %H:%M'
+
+        try:
+            timezone = pytz.timezone(timezone)
+            local_time = datetime.datetime.strptime(local_time, valid_time_format)
+            # Don't guess about DST. By setting is_dst=None, any ambigious time, or a time that does not
+            # exist because skip forward/backward in DST change over, an exception will be raised.
+            try:
+                local_time = timezone.localize(local_time, is_dst=None)
+            except (pytz.exceptions.AmbiguousTimeError, pytz.exceptions.NonExistentTimeError), e:
+                # If an AmbiguousTimeError occurs, it is likely because that time has occurred more than once.
+                # For example, 2002-10-27 01:30 happened twice in the US/Eastern timezone when DST ended.
+                # If a NonExistentTimeError occurs, it is because that particular point in time has not/does not occur.
+                # For example, 2018-10-07 02:30 does not occur in Australia/Sydney because DST starts at 02:00 with clocks
+                # skipping forward straight to 03:00
+                raise e
+
+            utc_time = local_time.astimezone(pytz.utc)
+
+            return utc_time
+
+        except Exception:
+            raise
 
     def set_services_dict(self, args):
         if not isinstance(args, dict):
@@ -668,6 +718,27 @@ class PrivacyProfiles(object):
         else:
             # Print as formatted plist out to stdout
             print plistlib.writePlistToString(self.template).rstrip('\n')
+
+    @staticmethod
+    def _set_timezone(timezone):
+        if timezone and len(timezone):
+            return timezone[0]
+        else:
+            return False
+
+    @staticmethod
+    def _set_profile_removal_date(removal_date):
+        if removal_date and len(removal_date):
+            return removal_date[0]
+        else:
+            return False
+
+    @staticmethod
+    def _set_profile_removal_password(profile_removal_password):
+        if profile_removal_password and len(profile_removal_password):
+            return profile_removal_password[0]
+        else:
+            return False
 
     @staticmethod
     def _set_sign_profile(sign_cert):
@@ -1025,6 +1096,17 @@ def parse_args():
     )
 
     parser.add_argument(
+        '--removable',
+        type=str,
+        nargs=1,
+        dest='profile_removal_password',
+        metavar='<password>',
+        help='Sets the profile to only be removable if the password provided '
+        'is used to remove it.',
+        required=False,
+    )
+
+    parser.add_argument(
         '--pv', '--payload-version',
         type=int,
         dest='payload_ver',
@@ -1042,6 +1124,29 @@ def parse_args():
         help='Signs a profile using the specified Certificate Name. To list '
              'code signing certificate names: /usr/bin/security find-identity '
              '-p codesigning -v',
+        required=False,
+    )
+
+    parser.add_argument(
+        '--removal-date',
+        type=str,
+        nargs=1,
+        dest='profile_removal_date',
+        metavar='"YYYY-mm-dd HH:MM"',
+        help='The date and time on which this profile will automatically '
+             'be removed. Must be in YYYY-mm-dd HH:MM format. '
+             'Example: "2018-09-29 14:30"',
+        required=False,
+    )
+
+    parser.add_argument(
+        '--tz', '--timezone',
+        type=str,
+        nargs=1,
+        dest='timezone',
+        metavar='"Country/City"',
+        help='The timezone of the destination system receiving this profile.'
+             'In the format of "Country/City". Example: "Australia/Brisbane"',
         required=False,
     )
 
@@ -1082,6 +1187,7 @@ def main():
         sys.exit(0)
     else:
         args = parse_args()
+
         # if args.launch_gui:
         #     launch_gui(args)
 
@@ -1091,8 +1197,11 @@ def main():
         payload_identifier=args.payload_identifier,
         payload_organization=args.payload_org,
         payload_version=args.payload_ver,
+        profile_removal_password=args.profile_removal_password,
         sign_cert=args.sign_profile,
-        filename=args.payload_filename
+        filename=args.payload_filename,
+        removal_date=args.profile_removal_date,
+        timezone=args.timezone,
     )
 
     # Insert the service dict into the template
