@@ -4,6 +4,7 @@
 ## Requirements
 - This script is targeted for use in python 2.7.10 as distributed with macOS
 
+## Installing Profiles
 Privacy Preferences Policy Control Payload profiles can only be installed via on a device that is either:
 - Enrolled in an MDM using DEP
 - Enrolled in an MDM using User Approved MDM enrolment
