@@ -137,7 +137,7 @@ Create payloads for multiple types:
 ```
 
 ### GUI Mode
-@brysonntyrrell has created a GUI for `tccprofile.py` as an alternative to the CLI.
+[@brysontyrrell](https://github.com/brysontyrrell) has created a GUI for `tccprofile.py` as an alternative to the CLI.
 
 To launch the GUI, invoke the script without passing any command line arguments:
 ```bash
