@@ -14,7 +14,7 @@
     - [Code Signing Scripts](#code-signing-scripts)
     - [Explicit or Generic Code Signing Requirements](#explicit-or-generic-code-signing-requirements)
     - [Camera and Microphone Payloads](#camera-and-microphone-payloads)
-    - [Read the TCC database/s](#using-the-tcc-databases-for-troubleshooting)
+    - [Using the TCC databases for troubleshooting](#using-the-tcc-databases-for-troubleshooting)
 - [Command Line Examples](#command-line-examples)
 - [GUI Mode](#gui-mode)
 
