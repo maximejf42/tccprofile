@@ -14,6 +14,7 @@
     - [Code Signing Scripts](#code-signing-scripts)
     - [Explicit or Generic Code Signing Requirements](#explicit-or-generic-code-signing-requirements)
     - [Camera and Microphone Payloads](#camera-and-microphone-payloads)
+    - [Read the TCC database/s](#using-the-tcc-databases-for-troubleshooting)
 - [Command Line Examples](#command-line-examples)
 - [GUI Mode](#gui-mode)
 
@@ -43,7 +44,6 @@ These are payloads avilable to configure whether apps can:
 - `tccprofile.py` generates all the relevant payload values automatically based on what arguments are provided at the command line, or selections made in the GUI.
 - When the `--allow` argument is used in the command line, _all_ payloads (except the camera and microphone) will be set to `Allowed = True`. If the `--allow` argument is not used, _all_ payloads will be set to `Allowed = False`. For any profile generated using the command line, if you need to allow and deny various apps in the one profile, you will need to manually change the relevant payload.
 - The `StaticCode` key is not supported. Manually modify the profile if this is required for an app. If you're not sure what this is, the [man page](x-man-page://codesign) has details, as well as [this stackoverflow page](https://stackoverflow.com/questions/43623044/what-kind-of-dynamic-code-modification-does-dynamic-code-validity-check-protects).
-
 
 ### Deploying via JAMF
 Profiles uploaded to versions of JAMF prior to the 10.7.1 release may need to be signed in order for the profile to be uploaded.
@@ -112,6 +112,29 @@ identifier "com.github.outset" and anchor apple generic
 ### Camera and Microphone Payloads
 Per Apple's [Configuration Profile Reference](https://developer.apple.com/enterprise/documentation/Configuration-Profile-Reference.pdf) documentation, the camera and microphone payloads will _always_ be set to `Deny`
 
+### Using the TCC databases for troubleshooting
+To assist in troubleshooting what PPPCP payloads to create for an application, the TCC databases (either in `~/Library/Application Support/com.apple.TCC/TCC.db` or `/Library/Application Support/com.apple.TCC/TCC.db`) can be read as long as the Terminal app (or terminal app of your choice) has been granted `Full Disk Access`.
+
+To use (`sudo` is required if reading the database in `/Library/Application Support/com.apple.TCC`):
+```
+./tccdbRead.py <path to TCC database>
+```
+
+It will output something like:
+```
+-----------------------------------------------------------------------
+ Service                             | Client
+-----------------------------------------------------------------------
+ kTCCServiceAccessibility            | com.adobe.Photoshop
+ kTCCServiceAccessibility            | com.divisiblebyzero.Spectacle
+ kTCCServiceAccessibility            | com.hegenberg.BetterSnapTool
+ kTCCServiceAccessibility            | com.vmware.fusion
+ kTCCServicePostEvent                | com.adobe.Photoshop
+ kTCCServicePostEvent                | com.divisiblebyzero.Spectacle
+ kTCCServicePostEvent                | com.hegenberg.BetterSnapTool
+ kTCCServiceSystemPolicyAllFiles     | /usr/sbin/sshd
+ kTCCServiceSystemPolicyAllFiles     | com.apple.Terminal
+ ```
 
 ## Command Line Examples
 ```bash
