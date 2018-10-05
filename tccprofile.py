@@ -29,9 +29,10 @@ from Foundation import NSPropertyListXMLFormat_v1_0  # NOQA
 # Script details
 __author__ = ['Carl Windus', 'Bryson Tyrrell']
 __license__ = 'Apache License 2.0'
-__version__ = '1.0.2'
+__version__ = '1.0.2.1'
+__date__ = '2018-10-05-2005'
 
-VERSION_STRING = 'Version: {} ({}), Authors: {}'.format(__version__, __license__, ', '.join(__author__))
+VERSION_STRING = 'Version: {} [{}] ({}), Authors: {}'.format(__version__, __date__, __license__, ', '.join(__author__))
 
 
 # Special thanks to the munki crew for the plist work.
@@ -504,7 +505,13 @@ def read_plist_from_string(data):
         return dataObject
 
 
+class PrivacyProfilesException(Exception):
+    """Basic error handling for PrivacyProfiles()"""
+    pass
+
+
 class PrivacyProfiles(object):
+    """Class for Privacy Profiles Creation"""
     # List of Payload types to iterate on because lazy code is good code
     PAYLOADS = [
         'AddressBook',
@@ -618,6 +625,14 @@ class PrivacyProfiles(object):
         except Exception:
             raise
 
+    @staticmethod
+    def _is_accessible(path):
+        """Returns if the path is accessible to the current user running this utility. Exits with error if not readable."""
+        if os.access(path, os.R_OK):  # Only need to determine if read access is possible
+            return True
+        else:
+            raise PrivacyProfilesException(errno.EACCES, 'Permission denied accessing {}'.format(path))
+
     def set_services_dict(self, args):
         if not isinstance(args, dict):
             arguments = vars(args)
@@ -684,25 +699,19 @@ class PrivacyProfiles(object):
                             payload_dict = self._build_payload(
                                 app_path=app, allowed=allow, apple_event=True,
                                 code_requirement=codesign_result,
-                                comment='{} {} to send {} control to {}'.format(
-                                    allow_statement, sending_app_name, payload,
-                                    receiving_app_name))
+                                comment='{} {} to send {} control to {}'.format(allow_statement, sending_app_name, payload, receiving_app_name))
 
                     else:
                         app_name = os.path.basename(os.path.splitext(app)[0])
-                        codesign_result = self._get_code_sign_requirements(
-                            path=app)
-                        payload_dict = self._build_payload(
-                            app_path=app,
-                            allowed=_allow,
-                            apple_event=False,
-                            code_requirement=codesign_result,
-                            comment='{} {} control for {}'.format(
-                                allow_statement,
-                                payload,
-                                app_name
+                        if self._is_accessible(app):  # Test if app path is accessible with current user privileges.
+                            codesign_result = self._get_code_sign_requirements(path=app)
+                            payload_dict = self._build_payload(
+                                app_path=app,
+                                allowed=_allow,
+                                apple_event=False,
+                                code_requirement=codesign_result,
+                                comment='{} {} control for {}'.format(allow_statement, payload, app_name)
                             )
-                        )
 
                     if payload_dict not in self.template['PayloadContent'][0]['Services'][payload]:
                         self.template['PayloadContent'][0]['Services'][payload].append(payload_dict)
@@ -714,10 +723,7 @@ class PrivacyProfiles(object):
 
             # Sign it if required
             if self._sign_cert:
-                self._sign_profile(
-                    certificate_name=self._sign_cert,
-                    input_file=self._filename
-                )
+                self._sign_profile(certificate_name=self._sign_cert, input_file=self._filename)
         else:
             # Print as formatted plist out to stdout
             print plistlib.writePlistToString(self.template).rstrip('\n')
