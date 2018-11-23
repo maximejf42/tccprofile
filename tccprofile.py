@@ -29,8 +29,8 @@ from Foundation import NSPropertyListXMLFormat_v1_0  # NOQA
 # Script details
 __author__ = ['Carl Windus', 'Bryson Tyrrell']
 __license__ = 'Apache License 2.0'
-__version__ = '1.0.2.1'
-__date__ = '2018-10-05-2005'
+__version__ = '1.0.2.2'
+__date__ = '2018-11-23-1455'
 
 VERSION_STRING = 'Version: {} [{}] ({}), Authors: {}'.format(__version__, __date__, __license__, ', '.join(__author__))
 
@@ -107,13 +107,6 @@ class App(tk.Frame):
         self._payload_id = tk.Entry(payload_frame, bg='white')
         self._payload_id.insert(0, 'com.my.tccprofile')
         self._payload_id.grid(row=4, column=0, columnspan=2, sticky='we')
-
-        tk.Label(payload_frame, text="Version").grid(
-            row=3, column=3, sticky='w'
-        )
-        self._payload_version = tk.Entry(payload_frame, bg='white')
-        self._payload_version.insert(0, '1')
-        self._payload_version.grid(row=4, column=3, columnspan=2, sticky='we')
 
         tk.Label(payload_frame, text="Description").grid(
             row=5, column=0, sticky='w'
@@ -333,32 +326,21 @@ class App(tk.Frame):
                     "Missing input for '{}'".format(k)
                 return
 
-        # The 'PayloadVersion' key MUST be an Integer value
-        _version = self._payload_version.get()
-        try:
-            if float(_version).is_integer():
-                version = int(_version)
-            else:
-                raise ValueError
-        except ValueError:
-            print('Invalid payload version')
-            self._feedback_label['text'] = "The 'Version' must be an integer!"
-            return
-
         app_lists = dict()
 
         for child in self.services_table.get_children():
             values = self.services_table.item(child)["values"]
             if not app_lists.get(values[1]):
-                app_lists[values[1]] = list()
+                app_lists[values[1]] = {'_apps': list(), 'apps': list()}
 
-            app_lists[values[1]].append(values[0])
+            # app_lists[values[1]].append(values[0])
+            app_lists[values[1]]['_apps'].append(values[0])
 
         for child in self.app_env_table.get_children():
             if not app_lists.get('AppleEvents'):
-                app_lists['AppleEvents'] = list()
+                app_lists['AppleEvents'] = {'_apps': list(), 'apps': list()}
 
-            app_lists['AppleEvents'].append(
+            app_lists['AppleEvents']['_apps'].append(
                 ','.join(self.app_env_table.item(child)["values"])
             )
 
@@ -383,7 +365,6 @@ class App(tk.Frame):
             payload_name=payload['Name'],
             payload_identifier=payload['Identifier'],
             payload_organization=payload['Organization'],
-            payload_version=version,
             profile_removal_password=None,
             sign_cert=None if sign == 'No' else sign,
             filename=filename,
@@ -465,15 +446,11 @@ class App(tk.Frame):
 
 
 def read_plist(filepath):
-    """
-    Read a .plist file from filepath.  Return the unpacked root object
-    (which is usually a dictionary).
-    """
+    """Read a .plist file from filepath. Return the unpacked root object (which is usually a dictionary)."""
     plistData = NSData.dataWithContentsOfFile_(filepath)
     dataObject, dummy_plistFormat, error = (
         NSPropertyListSerialization.
-        propertyListFromData_mutabilityOption_format_errorDescription_(
-            plistData, NSPropertyListMutableContainers, None, None))
+        propertyListFromData_mutabilityOption_format_errorDescription_(plistData, NSPropertyListMutableContainers, None, None))
     if dataObject is None:
         if error:
             error = error.encode('ascii', 'ignore')
@@ -493,8 +470,8 @@ def read_plist_from_string(data):
         raise NSPropertyListSerializationException(err)
     dataObject, dummy_plistFormat, error = (
         NSPropertyListSerialization.
-        propertyListFromData_mutabilityOption_format_errorDescription_(
-            plistData, NSPropertyListMutableContainers, None, None))
+        propertyListFromData_mutabilityOption_format_errorDescription_(plistData, NSPropertyListMutableContainers, None, None)
+    )
     if dataObject is None:
         if error:
             error = error.encode('ascii', 'ignore')
@@ -528,11 +505,9 @@ class PrivacyProfiles(object):
     ]
 
     def __init__(self, payload_description, payload_name, payload_identifier,
-                 payload_organization, payload_version, profile_removal_password,
+                 payload_organization, profile_removal_password,
                  sign_cert, filename, removal_date, timezone):
-        """Creates a Privacy Preferences Policy Control Profile for macOS
-        Mojave.
-        """
+        """Creates a Privacy Preferences Policy Control Profile for macOS Mojave."""
         # Init the things to put in the template, and elsewhere
         self.payload_description = payload_description
         self.payload_name = payload_name
@@ -637,27 +612,62 @@ class PrivacyProfiles(object):
         if not isinstance(args, dict):
             arguments = vars(args)
             app_lists = dict()
+            # apple_events_apps = arguments.get('events_apps_list', False)
+
+            # Make sure AppleEvents apps are splitabble
+            if arguments.get('events_apps_list', False) is not None and not all([len(app.split(',')) == 2 for app in arguments.get('events_apps_list', False)]):
+                print 'AppleEvents applications must be in the format of /Application/Path/EventSending.app,/Application/Path/EventReceiving.app'
+                print 'or'
+                print ('/Volumes/ExtDisk/Path/EventSending.app:/Application/OverridePath/EventSending.app,'
+                       '/Volumes/ExtDisk/Path/EventReceiving.app:/Application/OverridePath/EventReceiving.app')
+                sys.exit(1)
 
             # Build up args to pass to the class init
-            app_lists['AddressBook'] = arguments.get(
-                'address_book_apps_list', False)
-            app_lists['Calendar'] = arguments.get('calendar_apps_list', False)
-            app_lists['Reminders'] = arguments.get('reminders_apps_list', False)
-            app_lists['Photos'] = arguments.get('photos_apps_list', False)
-            app_lists['Camera'] = arguments.get('camera_apps_list', False)
-            app_lists['Microphone'] = arguments.get(
-                'microphone_apps_list', False)
-            app_lists['Accessibility'] = arguments.get(
-                'accessibility_apps_list', False)
-            app_lists['PostEvent'] = arguments.get(
-                'post_event_apps_list', False)
-            app_lists['SystemPolicyAllFiles'] = arguments.get(
-                'allfiles_apps_list', False)
-            app_lists['SystemPolicySysAdminFiles'] = arguments.get(
-                'sysadmin_apps_list', False)
-            app_lists['AppleEvents'] = arguments.get('events_apps_list', False)
+            app_lists['Accessibility'] = {'_apps': arguments.get('accessibility_apps_list', False), 'apps': list()}
+            app_lists['AddressBook'] = {'_apps': arguments.get('address_book_apps_list', False), 'apps': list()}
+            app_lists['AppleEvents'] = {'_apps': arguments.get('events_apps_list', False), 'apps': list()}
+            app_lists['Calendar'] = {'_apps': arguments.get('calendar_apps_list', False), 'apps': list()}
+            app_lists['Camera'] = {'_apps': arguments.get('camera_apps_list', False), 'apps': list()}
+            app_lists['Microphone'] = {'_apps': arguments.get('microphone_apps_list', False), 'apps': list()}
+            app_lists['Photos'] = {'_apps': arguments.get('photos_apps_list', False), 'apps': list()}
+            app_lists['PostEvent'] = {'_apps': arguments.get('post_event_apps_list', False), 'apps': list()}
+            app_lists['Reminders'] = {'_apps': arguments.get('reminders_apps_list', False), 'apps': list()}
+            app_lists['SystemPolicyAllFiles'] = {'_apps': arguments.get('allfiles_apps_list', False), 'apps': list()}
+            app_lists['SystemPolicySysAdminFiles'] = {'_apps': arguments.get('sysadmin_apps_list', False), 'apps': list()}
         else:
             app_lists = args
+
+        for key in app_lists.keys():
+            if app_lists[key]['_apps'] is not None:
+                for app in app_lists[key]['_apps']:
+                    value = dict()
+                    sending_app = app.split(',')[0]
+                    receiving_app = app.split(',')[1] if ',' in app else False
+
+                    value['sending_app_path'] = sending_app.split(':')[0] if ':' in sending_app else sending_app
+                    value['sending_app_path_override'] = app.split(':')[1] if ':' in app else False
+
+                    if key == 'AppleEvents' and app.count(',') == 1:
+                        receiving_app = app.split(',')[1]
+                        if sending_app.count(':') > 1 or receiving_app.count(':') > 1:
+                            print 'Too many \':\' characters in AppleEvents app string. One \':\' per sender and recever app is excpected.'
+                            sys.exit(1)
+                        else:
+                            value['sending_app_path'] = sending_app.split(':')[0] if ':' in sending_app else value['sending_app_path']
+                            value['sending_app_path_override'] = sending_app.split(':')[1] if ':' in sending_app else False
+                            if receiving_app:
+                                value['receiving_app_path'] = receiving_app.split(':')[0]
+                                value['receiving_app_path_override'] = receiving_app.split(':')[1] if ':' in receiving_app else False
+                    if value not in app_lists[key]['apps']:
+                        app_lists[key]['apps'].append(value)
+
+        # Remove all None values in dict
+        for key in app_lists.keys():
+            if app_lists[key]['_apps'] is None:
+                del app_lists[key]
+            else:
+                # Get rid of the _apps as it's no longer required
+                app_lists[key] = app_lists[key]['apps']
 
         # Handle if no payload arguments are supplied,
         # Can't create an empty profile.
@@ -672,51 +682,87 @@ class PrivacyProfiles(object):
             if app_lists.get(payload):
                 self.template['PayloadContent'][0]['Services'][payload] = []
 
+    @staticmethod
+    def _app_name(app_obj):
+        return os.path.basename(os.path.splitext(app_obj)[0])
+
     def build_profile(self, allow):
+        """Builds the profile out into the full dict required to write as a plist or to stdout."""
         for payload in self.PAYLOADS:
             if self._app_lists.get(payload):
                 for app in self._app_lists[payload]:
-                    if payload in ['Camera', 'Microphone'] or not allow:  # Camera and Microphone payloads can only DENY an app access to that hardware.
+                    # Common payload values
+                    sending_app = dict()
+                    sending_app['path'] = app['sending_app_path']
+                    sending_app['path_override'] = app.get('sending_app_path_override', False)
+                    sending_app['codesign_result'] = self._get_code_sign_requirements(path=sending_app['path'])
+                    sending_app['app_name'] = self._app_name(app_obj=sending_app['path'])
+
+                    app_identifier_type = self._get_identifier_and_type(app_path=sending_app['path'], override_path=sending_app['path_override'])
+                    sending_app['identifier'] = app_identifier_type['identifier']
+                    sending_app['identifier_type'] = app_identifier_type['identifier_type']
+
+                    # Camera and Microphone payloads can only DENY an app access to that hardware.
+                    if payload in ['Camera', 'Microphone'] or not allow:
                         _allow = False
                         allow_statement = 'Deny'
                     else:
                         _allow = allow
                         allow_statement = 'Allow'
 
-                    if payload == 'AppleEvents':  # AppleEvent payload has additional requirements
-                        if not len(app.split(',')) == 2:
-                            print 'AppleEvents applications must be in the format of /Application/Path/EventSending.app,/Application/Path/EventReceiving.app'
-                            sys.exit(1)
-                        else:
-                            sending_app = app.split(',')[0]
-                            receiving_app = app.split(',')[1]
-                            sending_app_name = os.path.basename(
-                                os.path.splitext(sending_app)[0])
-                            receiving_app_name = os.path.basename(
-                                os.path.splitext(receiving_app)[0])
-                            codesign_result = self._get_code_sign_requirements(
-                                path=app.split(',')[0])
-                            payload_dict = self._build_payload(
-                                app_path=app, allowed=allow, apple_event=True,
-                                code_requirement=codesign_result,
-                                comment='{} {} to send {} control to {}'.format(allow_statement, sending_app_name, payload, receiving_app_name))
-
+                    # Add details about the receiving app if the payload is an AppleEvents type
+                    if payload == 'AppleEvents':
+                        receiving_app = dict()
+                        receiving_app['path'] = app.get('receiving_app_path', False)
+                        receiving_app['path_override'] = app.get('receiving_app_path_override', False)
+                        receiving_app['codesign_result'] = self._get_code_sign_requirements(path=receiving_app['path'])
+                        receiving_app['app_name'] = self._app_name(app_obj=receiving_app['path'])
+                        app_identifier_type = self._get_identifier_and_type(app_path=receiving_app['path'], override_path=receiving_app['path_override'])
+                        receiving_app['identifier'] = app_identifier_type['identifier']
+                        receiving_app['identifier_type'] = app_identifier_type['identifier_type']
+                        comment = '{} {} to send {} control to {}'.format(allow_statement, sending_app['app_name'], payload, receiving_app['app_name'])
                     else:
-                        app_name = os.path.basename(os.path.splitext(app)[0])
-                        if self._is_accessible(app):  # Test if app path is accessible with current user privileges.
-                            codesign_result = self._get_code_sign_requirements(path=app)
-                            payload_dict = self._build_payload(
-                                app_path=app,
-                                allowed=_allow,
-                                apple_event=False,
-                                code_requirement=codesign_result,
-                                comment='{} {} control for {}'.format(allow_statement, payload, app_name)
-                            )
+                        receiving_app = False
+                        comment = '{} {} control for {}'.format(allow_statement, payload, sending_app['app_name'])
 
+                    # Pass the payload over to the _build_payload function
+                    payload_dict = self._build_payload(
+                        sending_app=sending_app,
+                        receiving_app=receiving_app,
+                        allowed=_allow,
+                        apple_event=True if payload == 'AppleEvents' else False,
+                        comment=comment,
+                    )
+
+                    # Add the assembled payload_dict to the template
                     if payload_dict not in self.template['PayloadContent'][0]['Services'][payload]:
                         self.template['PayloadContent'][0]['Services'][payload].append(payload_dict)
 
+    def _build_payload(self, sending_app, receiving_app, allowed, apple_event, comment):
+        """Builds an Accessibility payload for the profile."""
+        if isinstance(sending_app, dict) and isinstance(apple_event, bool) and isinstance(comment, str):
+            # Only return a basic dict, even though the Services needs a dict
+            # supplied, and the 'Accessibility' "payload" is a list of dicts.
+            result = {
+                'Allowed': allowed,
+                'CodeRequirement': sending_app['codesign_result'],
+                'Comment': comment,
+                'Identifier': sending_app['identifier'],
+                'IdentifierType': sending_app['identifier_type'],
+            }
+
+            # If the payload is an AppleEvent type, there are additional
+            # requirements relating to the receiving app.
+            if apple_event and isinstance(receiving_app, dict):
+                result['AEReceiverIdentifier'] = receiving_app['identifier']
+                result['AEReceiverIdentifierType'] = receiving_app['identifier_type']
+                result['AEReceiverCodeRequirement'] = receiving_app['codesign_result']
+
+            return result
+
     def write(self):
+        """Handles writing the profile out to file, and will also create the configuration template if the relevant argument is provided."""
+        # Write out the file if a filename is provided, otherwise dump to stdout
         if self._filename:
             # Write the plist out to file
             plistlib.writePlist(self.template, self._filename)
@@ -782,9 +828,7 @@ class PrivacyProfiles(object):
 
     @staticmethod
     def _read_shebang(app_path):
-        """Returns the contents of the shebang in a script file, as long as env
-        is not in the shebang
-        """
+        """Returns the contents of the shebang in a script file, as long as env is not in the shebang."""
         with open(app_path, 'r') as textfile:
             line = textfile.readline().rstrip('\n')
             if line.startswith('#!') and 'env ' not in line:
@@ -805,10 +849,12 @@ class PrivacyProfiles(object):
             elif process.returncode is 1 and 'not signed' in error:
                 return False
 
-        if os.path.exists(path.rstrip('/')):
+        # Make sure the path exists and is readable.
+        if os.path.exists(path.rstrip('/')) and self._is_accessible(path.rstrip('/')):
             # Handle situations where path is a script, and shebang is
             # ['/bin/sh', '/bin/bash', '/usr/bin/python']
             mimetype = self._get_file_mime_type(path=path)
+
             if mimetype in ['x-python', 'x-shellscript']:
                 if not _is_code_signed(path):  # Only use shebang path if a script is not code signed
                     path = self._read_shebang(app_path=path)
@@ -833,11 +879,17 @@ class PrivacyProfiles(object):
         else:
             raise OSError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    def _get_identifier_and_type(self, app_path):
-        """Checks file type, and returns appropriate values for `Identifier`and
-        `IdentifierType` keys in the final profile payload.
-        """
+    def _get_identifier_and_type(self, app_path, override_path=False):
+        """Checks file type, and returns appropriate values for `Identifier`and `IdentifierType` keys in the final profile payload."""
+        # Only change the app_path to the override path if '.app' is not the file extension, because app's should have CFBundleIdentifier payload
+        # in the App/Contents/Info.plist file
+        if override_path and os.path.splitext(override_path)[1] != '.app' and os.path.splitext(app_path)[1] != '.app':
+            app_path = override_path.rstrip('/') if override_path else app_path.rstrip('/')
+
+        # Determine mimetype
         mimetype = self._get_file_mime_type(path=app_path)
+
+        # Check for mimetype of file
         if mimetype in ['x-shellscript', 'x-python']:
             identifier = app_path
             identifier_type = 'path'
@@ -846,49 +898,10 @@ class PrivacyProfiles(object):
                 identifier = read_plist(os.path.join(app_path.rstrip('/'), 'Contents/Info.plist'))['CFBundleIdentifier']
                 identifier_type = 'bundleID'
             except Exception:
-                identifier = app_path.rstrip('/')
+                identifier = app_path
                 identifier_type = 'path'
 
         return {'identifier': identifier, 'identifier_type': identifier_type}
-
-    def _build_payload(self, app_path, allowed, apple_event, code_requirement, comment):
-        """Builds an Accessibility payload for the profile."""
-        if type(allowed) is bool and type(code_requirement) is str and type(apple_event) is bool:
-            # Check if building an Apple Event. The sending app and receiving app must be seperated by comma
-            # Example: ['/Applications/Foo.app,/Applications/Bar.app']
-            # The receiving app is the second/last app in the "list" (splits on comma)
-            if apple_event and ',' in app_path and len(app_path.split(',')) == 2:
-                receiving_app = app_path.split(',')[1]
-                app_path = app_path.split(',')[0]
-                receiving_app_identifiers = self._get_identifier_and_type(app_path=receiving_app)
-                receiving_app_identifier = receiving_app_identifiers['identifier']
-                receiving_app_identifier_type = receiving_app_identifiers['identifier_type']
-            elif apple_event and ',' not in app_path and len(app_path.split(',')) == 2:
-                print 'AppleEvents applications must be in the format of /Application/Path/EventSending.app,/Application/Path/EventReceiving.app'
-                sys.exit(1)
-
-            app_identifiers = self._get_identifier_and_type(app_path=app_path)
-            identifier = app_identifiers['identifier']
-            identifier_type = app_identifiers['identifier_type']
-
-            # Only return a basic dict, even though the Services needs a dict
-            # supplied, and the 'Accessibility' "payload" is a list of dicts.
-            result = {
-                'Allowed': allowed,
-                'CodeRequirement': code_requirement,
-                'Comment': comment,
-                'Identifier': identifier,
-                'IdentifierType': identifier_type,
-            }
-
-            # If the payload is an AppleEvent type, there are additional
-            # requirements relating to the receiving app.
-            if apple_event:
-                result['AEReceiverIdentifier'] = receiving_app_identifier
-                result['AEReceiverIdentifierType'] = receiving_app_identifier_type
-                result['AEReceiverCodeRequirement'] = self._get_code_sign_requirements(path=receiving_app)
-
-            return result
 
     def _sign_profile(self, certificate_name, input_file):
         """Signs the profile."""
@@ -899,7 +912,6 @@ class PrivacyProfiles(object):
 
 class SaneUsageFormat(argparse.HelpFormatter):
     """Makes the help output somewhat more sane. Code used was from Matt Wilkie.
-
     http://stackoverflow.com/questions/9642692/argparse-help-without-duplicate-allcaps/9643162#9643162
     """
 
@@ -937,7 +949,7 @@ def parse_args():
         nargs='*',
         dest='address_book_apps_list',
         metavar='<app paths>',
-        help='Generate an AddressBook payload for the specified applications.',
+        help='Generate an AddressBook payload for the specified applications,',
         required=False,
     )
 
@@ -1026,7 +1038,7 @@ def parse_args():
     )
 
     parser.add_argument(
-        '--ae', '--appleevents',
+        '--ae', '--apple-event',
         type=str,
         nargs='*',
         dest='events_apps_list',
@@ -1116,16 +1128,6 @@ def parse_args():
     )
 
     parser.add_argument(
-        '--pv', '--payload-version',
-        type=int,
-        dest='payload_ver',
-        metavar='payload_version',
-        help='Version to use for the profile. '
-             'This is now deprecated as Apple documentation indicates this value must be 1.',
-        required=False,
-    )
-
-    parser.add_argument(
         '-s', '--sign',
         type=str,
         nargs=1,
@@ -1183,8 +1185,6 @@ def launch_gui(args=None):
     info = AppKit.NSBundle.mainBundle().infoDictionary()
     info['LSUIElement'] = True
 
-    print(args)
-
     root = tk.Tk()
     app = App(root)
     AppKit.NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
@@ -1206,7 +1206,6 @@ def main():
         payload_name=args.payload_name,
         payload_identifier=args.payload_identifier,
         payload_organization=args.payload_org,
-        payload_version=args.payload_ver,
         profile_removal_password=args.profile_removal_password,
         sign_cert=args.sign_profile,
         filename=args.payload_filename,
